@@ -43,6 +43,7 @@ The Weekly Exam might relate to the motivation of the students before taking the
 The Study time has a direct cause to the Final Exam because the more time you put in your study, the higher chance you get a better score in the final exam.
 
 ```{r}
+testing
 library(dagitty)
 library(ggdag)
 

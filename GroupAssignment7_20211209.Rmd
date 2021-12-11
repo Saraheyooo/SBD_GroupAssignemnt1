@@ -1,0 +1,186 @@
+---
+title: "GroupAssignment7"
+output: pdf_document
+---
+
+# By :
+- Jonas Heller - 6047084
+- Sarah Hsu - 8264937
+- Madina Habib - 5784182
+- Lars Gadellaa - 1926888
+- Gama Candra Tri Kartika - 1088017
+
+# Group Assignment part 1 
+## 1. Draw a DAG representing a simple and somewhat plausible causal system from your domain of expertise. It should contain somewhere between 5 and 9 variables.
+
+8 Variables:
+- SS = Study Success
+- St = Study Time
+- Gr = Grade
+- We = Weekly Exam
+- Fe = Final Exam
+- Wa = Weekly Assignment
+- Sa = Student Attendance
+- Ec = Extra Curricular
+
+1. SS ~ Gr + EC + Sa
+Study Success is caused by Grade, Extra Curricular activities and attendance 
+The grade has to be above a certain threshold for a student to be successful.
+If a student does extracurricular activities they are more likely motivated to succeed.
+If a student has a higher attendance they are probably more motivated and have a better understanding of the material and so will more likely succeed.
+Grade is caused by Weekly assignments, final exam, attendance and assignment. 
+
+2. Gr ~ We + Fe  + Wa
+The final grade is calculated as a percentage of both final grade and the weekly assignment as a bonus point for final grade. 
+
+3. We ~ Sa + St
+The Student attendance has a causal relationship with the Weekly Exam because it shows the motivation of the students and understanding the weekly exam questions.
+The Study time has a direct cause to the Weekly Exam because the more time you put in your study, the higher chance you get a better score in the weekly exam.
+
+4. Fe ~ Sa + We + St
+Student attendance has a causal relationship with the final exam because it shows the motivation of the students and shows that the student has spent a considerable amount of time.
+The Weekly Exam might relate to the motivation of the students before taking the final exam.
+The Study time has a direct cause to the Final Exam because the more time you put in your study, the higher chance you get a better score in the final exam.
+
+```{r}
+library(dagitty)
+library(ggdag)
+
+eddag <- dagify(
+  SS ~ Gr +Sa + EC,
+  Gr ~ We + Fe + Wa,
+  Fe ~ We+St+Sa,
+  We ~ St+Sa,
+  exposure = "Gr", 
+  outcome = "SS", 
+  coords = list(x = c(We = -1, St = 0, Fe = -1, Gr=0, St=0, Wa=0, EC=1, SS=1, Sa=0),
+                y = c(We = 1, St=1, Fe = 0, Gr=0, St=-1, Wa=-1, EC=-1, SS=0, Sa=2)) 
+)
+
+ggdag_status(eddag) + theme_dag()
+adjustmentSets(eddag)
+```
+## 2. Construct an SCM for this causal system. Pick any kind of relationships and variable types you like: It can be linear and nonlinear in parts, and the variables can have any type of distribution.
+
+8 Variables:
+4 Dependent
+- SS = Ifelse(0.6 * Gr + 2 * EC + 2 * SA > 5.5, 1, 0)
+- Gr = 0.3 * We + 0.7*(Fe+ifelse(Wa > 8, 1, 0) *0.55) 
+- We = (rtruncnorm(500,a=1, b=10, mean=7.5,sd = 3) + 0.7 * St /40 + 0.2 * Sa / 9 + 0.1 * We / 10)
+- Fe = (rtruncnorm(500,a=1, b=10, mean=6,sd = 3) + 0.4 * St / 40 + 0.6 * Sa / 9)
+
+4 Independent
+- Wa = floor(rnorm(500, mean=7,sd = 1)) 
+- Sa = floor(rtruncnorm(n=500, a=0, b=9, mean=7,sd = 4))
+- St = floor(rtruncnorm(n=500, a=13, b=40, mean=20,sd = 8))
+- Ec = rbinom(500, 1, prob=0.4)
+
+```{r}
+library(truncnorm)
+  
+set.seed(7)
+
+# Marginal Independet variables
+Wa <- floor(rnorm(500, mean=7,sd = 1)) 
+Sa <- floor(rtruncnorm(n=500, a=0, b=9, mean=7,sd = 4))
+St <- floor(rtruncnorm(n=500, a=13, b=40, mean=20,sd = 8))
+Ec <- rbinom(500, 1, prob=0.4)
+
+# Conditional dependent variables
+We = (rtruncnorm(500,a=1, b=10, mean=6,sd = 3) + 0.4 * St / 40 + 0.6 * Sa / 9)
+Fe = (rtruncnorm(500,a=1, b=10, mean=7.5,sd = 3) + 0.7 * St /40 + 0.2 * Sa / 9 + 0.1 * We / 10)
+Gr = 0.3 * We + 0.7*(Fe+ifelse(Wa > 8, 1, 0) *0.55) 
+Ss = ifelse((0.6 * Gr + 2 * Ec + 2 * Sa / 9) > 5.5, 1, 0)
+```
+
+## 3. Generate and save data from the observational distribution (i.e., observational data) using a sample size of n=500
+```{r}
+obs_data <- data.frame(Wa, Sa, St, Ec, We, Fe, Gr, Ss)
+```
+
+# 4. Generate and save data after a very simple do() intervention on this system, again using a sample size of n=500. Briefly describe why this intervention would be of interest substantively.
+
+We intervene on Study time because this variable has the most influence on all other variables which result in study success. So in this case, we still put a random value, but with a minimum value of 20 hours. Let's say Do(St > 20).
+
+```{r}
+St_i <- floor(rtruncnorm(n=500, a=20, b=40, mean=20,sd = 1))
+We_i = (rtruncnorm(500,a=1, b=10, mean=6,sd = 3) + 0.4 * St_i / 40 + 0.6 * Sa / 9)
+Fe_i = (rtruncnorm(500,a=1, b=10, mean=7.5,sd = 3) + 0.7 * St_i /40 + 0.2 * Sa / 9 + 0.1 * We / 10)
+Gr_i = 0.3 * We + 0.7*(Fe+ifelse(Wa > 8, 1, 0) *0.55) 
+Ss_i = ifelse((0.6 * Gr + 2 * Ec + 2 * Sa / 9) > 5.5, 1, 0)
+
+int_data <- data.frame(Wa, Sa, St=St_i, Ec, We=We_i, Fe=Fe_i, Gr=Gr_i, Ss=Ss_i)
+```
+
+# Group Assignment Part 2
+## Choose a causal discovery method that is most appropriate for your particular setting, and say why you chose that method: do the variables share linear relationships? Gaussian or non-Gaussian noise? I want to see a (brief) reflection on the different methods you learned about this week, at least in identifying which method is most appropriate for your specific case.
+
+So first of all, there are 3 different causal discovery methods. CI Methods, Restricted SCM, and Invariant Causal Prediction. We think our variables share a linear relationship. One example, the relationship between Final Exam and Grade.
+
+```{r}
+library(dHSIC)
+myx <- lm(Fe~Gr)
+mxy <-  lm(Gr~Fe)
+
+# save residuals
+myx_r <- myx$residuals
+mxy_r <- mxy$residuals
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(Gr, Fe, col = "blue", xlab = "Grade", ylab = "Final Exam",  lwd = 2)
+abline(myx, col = "red")
+abline(h = 0)
+abline(v = 0)
+
+plot(Gr,myx$residuals, col = "red", ylab = expression(epsilon[Y]))
+abline(h = 0)
+abline(v = 0)
+```
+```{r}
+# Second, for the incorrect causal model X = Y + epsilon
+par(mfrow=c(1,2))
+plot(Fe, Gr, col = "blue", xlab = "Final Exam", ylab = "Grade", lwd = 2)
+abline(mxy, col = "red")
+abline(h = 0)
+abline(v = 0)
+
+plot(Fe,mxy$residuals, col = "red", ylab = expression(epsilon[X]))
+abline(h = 0)
+abline(v = 0)
+```
+But for the noise, we still are not sure what kind of distribution is that. Because we are simply not sure how to differentiate that the noise is Gaussian distribution or not. We could say that the noise is more on non-Gaussian distribution. Due to that relation, we could use Restricted SCM as a causal discovery model as our best causal discovery method.
+
+## Apply the causal discovery method to your data, and discuss the results. What do you find? Do you recover some features of the true causal system? Why do you think this is the case? Think about the fundamental limitations of different approaches, and the appropriateness of the assumptions you make.
+
+```{r}
+library(pcalg)
+library(qgraph)
+lin_fit <- lingam(obs_data)
+adjlin <- as(lin_fit, "amat")
+
+# very hacky way of transforming amat to a numeric matrix
+adjmat2 <- apply(adjlin,c(1,2),isTRUE) + 0
+
+qgraph(adjmat2)
+```
+from `lingam()` we get this table :
+
+|    |        | Wa     | Sa     | St     | Ec     | We     | Fe     | Gr     | Ss     |
+| -- | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+|    |        | \[,1\] | \[,2\] | \[,3\] | \[,4\] | \[,5\] | \[,6\] | \[,7\] | \[,8\] |
+| Wa | \[1,\] | 0      | 0      | 0      | 0      | 0      | 0      | 0      | 0      |
+| Sa | \[2,\] | 0      | 0      | 0      | 0      | 0      | 0      | 0      | 0      |
+| St | \[3,\] | 0      | 0      | 0      | 0      | 0      | 0      | 0      | 0      |
+| Ec | \[4,\] | 0      | 1      | 0      | 0      | 0      | 0      | 0      | 1      |
+| We | \[5,\] | 1      | 0      | 0      | 0      | 0      | 0      | 0      | 0      |
+| Fe | \[6,\] | 1      | 0      | 0      | 0      | 1      | 0      | 0      | 0      |
+| Gr | \[7,\] | 1      | 0      | 0      | 0      | 1      | 1      | 0      | 1      |
+| Ss | \[8,\] | 0      | 1      | 0      | 0      | 0      | 0      | 0      | 0      |
+
+The causal discovery model is not as expected beforehand. Datapoint three is not connected to the other data points as can be seen in the picture above. Datapoint three stands for the third datapoint in the dataframe, which is study time. The correct causal model should show that datapoint three affects datapoint five and six (weekly exam and final exam respectively).
+One reason for the causal model not looking as expected, could be that the chosen causal discovery method was not the correct one. In the previous question, we mentioned not being sure about the noise having a Gaussian distribution or not. Our decision on this has affected the decision for the causal discovery method. This could explain why the model does not look as expected. 
+Another reason could be that St as we have defined it in part 1 of the assignment, does not affect Fe, We, Gr and Ss as we intended it to. 
+
+
